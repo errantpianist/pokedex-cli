@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/errantpianist/pokedexcli/internal/pokeapi"
+	"github.com/errantpianist/pokedexcli/internal/pokecache"
 )
 
 type cliCommand struct {
@@ -18,6 +20,7 @@ type cliCommand struct {
 type config struct {
 	nextURL *string
 	previousURL *string
+	cache *pokecache.Cache
 }
 
 
@@ -41,7 +44,7 @@ func commandExit(cfg *config) error {
 
 func commandHelp(cfg *config) error {
 	fmt.Println("Welcome to the Pokedex!")
-	fmt.Println("Usage:\n")
+	fmt.Println("Usage:")
 
 	commands := getCommands()
 	for _, command := range commands {
@@ -56,7 +59,7 @@ func commandMap(cfg *config) error {
 		url = *cfg.nextURL
 	}
 
-	locations, err := pokeapi.GetLocationAreas(url)
+	locations, err := pokeapi.GetLocationAreas(url, cfg.cache)
 	if err != nil {
 		return err
 	}
@@ -72,12 +75,12 @@ func commandMap(cfg *config) error {
 }
 
 func commandMapb(cfg *config) error {
-	url := "https://pokeapi.co/api/v2/location-area"
-	if cfg.previousURL != nil {
-		url = *cfg.previousURL
+	if cfg.previousURL == nil {
+		fmt.Println("You are already at the first page of location areas.")
+		return nil
 	}
 
-	locations, err := pokeapi.GetLocationAreas(url)
+	locations, err := pokeapi.GetLocationAreas(*cfg.previousURL, cfg.cache)
 	if err != nil {
 		return err
 	}
@@ -122,7 +125,9 @@ func getCommands() map[string]cliCommand {
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	commands := getCommands()
-	cfg := &config{}
+	cfg := &config{
+		cache: pokecache.NewCache(5 * time.Minute), // Cache for 5 minutes
+	}
 
 	for {
 		fmt.Print("Pokedex > ")
