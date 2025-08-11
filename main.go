@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -17,12 +18,21 @@ type cliCommand struct {
 		callback func(*config, ...string) error
 }
 
+type Pokemon struct {
+	ID	 int    `json:"id"`
+	Name string `json:"name"`
+	Height int    `json:"height"`
+	Weight int    `json:"weight"`
+	Stats map[string]int `json:"stats"`
+	Types []string `json:"types"`
+}
+
 type config struct {
 	nextURL *string
 	previousURL *string
 	cache *pokecache.Cache
+	pokedex map[string]Pokemon
 }
-
 
 func cleanInput(text string) []string {
 	trimmed := strings.TrimSpace(text)
@@ -116,6 +126,90 @@ func commandExplore(cfg *config, args ...string) error {
 	return nil
 }
 
+func commandCatch(cfg *config, args ...string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("please provide a Pokemon name")
+	}
+
+	pokemonName := args[0]
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+
+	pokemon, err := pokeapi.GetPokemon(pokemonName, cfg.cache)
+	if err != nil {
+		return fmt.Errorf("error catching Pokemon %s: %v", pokemonName, err)
+	}
+
+	rand.Seed(time.Now().UnixNano())
+	catchChance := rand.Intn(pokemon.BaseExperience + 50)
+
+	if catchChance < 50 {
+		fmt.Printf("%s was caught!\n", pokemonName)
+
+		if cfg.pokedex == nil {
+			cfg.pokedex = make(map[string]Pokemon)
+		}
+
+		stats := make(map[string]int)
+		for _, stat := range pokemon.Stats {
+			stats[stat.Stat.Name] = stat.BaseStat
+		}
+
+		types := make([]string, len(pokemon.Types))
+		for i, t := range pokemon.Types {
+			types[i] = t.Type.Name
+		}
+
+
+		cfg.pokedex[pokemonName] = Pokemon{
+			ID: pokemon.ID,
+			Name: pokemon.Name,
+			Height: pokemon.Height,
+			Weight: pokemon.Weight,
+			Stats: stats,
+			Types: types,
+		}
+	} else {
+		fmt.Printf("%s escaped!\n", pokemonName)
+	}
+
+	return nil
+	
+}
+
+func commandInspect(cfg *config, args ...string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("please provide a Pokemon name to inspect")
+	}
+
+	pokemonName := args[0]
+
+	pokemon, exists := cfg.pokedex[pokemonName]
+	if !exists {
+		fmt.Println("you have not caught that pokemon")
+		return nil
+	}
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("ID: %d\n", pokemon.ID)
+	fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+	fmt.Println("Stats:")
+
+	statNames := []string{"hp", "attack", "defense", "special-attack", "special-defense", "speed"}
+	for _, statName := range statNames {
+		if statValue, exists := pokemon.Stats[statName]; exists {
+			fmt.Printf("  - %s: %d\n", statName, statValue)
+		}
+	}
+
+	fmt.Println("Types:")
+	for _, t := range pokemon.Types {
+		fmt.Printf("  - %s\n", t)
+	}
+
+
+	return nil
+}
+
 func getCommands() map[string]cliCommand {
 	return map[string]cliCommand{
 		"exit": {
@@ -143,7 +237,16 @@ func getCommands() map[string]cliCommand {
 			description: "Explores a specific location area",
 			callback: commandExplore,
 		},
-	
+		"catch": {
+			name: "catch",
+			description: "Catches a Pokemon by name",
+			callback: commandCatch,
+		},
+		"inspect": {
+			name: "inspect",
+			description: "View details of a caught Pokemon",
+			callback: commandInspect,
+		},
 	}
 }
 	
@@ -153,6 +256,7 @@ func main() {
 	commands := getCommands()
 	cfg := &config{
 		cache: pokecache.NewCache(5 * time.Minute), // Cache for 5 minutes
+		pokedex: make(map[string]Pokemon),
 	}
 
 	for {

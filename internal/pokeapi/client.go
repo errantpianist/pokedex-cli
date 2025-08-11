@@ -126,3 +126,58 @@ func GetLocationArea(areaName string, cache *pokecache.Cache) (LocationArea, err
 
 	return area, nil
 }
+
+type PokemonResp struct {
+	ID int `json:"id"`
+	Name string `json:"name"`
+	BaseExperience int `json:"base_experience"`
+	Height int `json:"height"`
+	Weight int `json:"weight"`
+	Stats []struct {
+		BaseStat int `json:"base_stat"`
+		Stat struct {
+			Name string `json:"name"`
+		} `json:"stat"`
+	} `json:"stats"`
+	Types []struct {
+		Type struct {
+			Name string `json:"name"`
+		} `json:"type"`
+	} `json:"types"`
+}
+
+func GetPokemon(pokemonName string, cache *pokecache.Cache) (PokemonResp, error) {
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s", pokemonName)
+
+	if cachedData, ok := cache.Get(url); ok {
+		fmt.Println("Using cached data for", url)
+		var pokemon PokemonResp
+		err := json.Unmarshal(cachedData, &pokemon)
+		return pokemon, err
+	}
+
+	fmt.Println("Fetching data from", url)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return PokemonResp{}, err
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return PokemonResp{}, err
+	}
+
+	cache.Add(url, body)
+
+	var pokemon PokemonResp
+	err = json.Unmarshal(body, &pokemon)
+	if err != nil {
+		return PokemonResp{}, err
+	}
+
+	return pokemon, nil
+}
