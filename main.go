@@ -14,7 +14,7 @@ import (
 type cliCommand struct {
 		name string
 		description string
-		callback func(*config) error
+		callback func(*config, ...string) error
 }
 
 type config struct {
@@ -36,13 +36,13 @@ func cleanInput(text string) []string {
 	return words
 }
 
-func commandExit(cfg *config) error {
+func commandExit(cfg *config, args ...string) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp(cfg *config) error {
+func commandHelp(cfg *config, args ...string) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Println("Usage:")
 
@@ -53,7 +53,7 @@ func commandHelp(cfg *config) error {
 	return nil
 }
 
-func commandMap(cfg *config) error {
+func commandMap(cfg *config, args ...string) error {
 	url := "https://pokeapi.co/api/v2/location-area"
 	if cfg.nextURL != nil {
 		url = *cfg.nextURL
@@ -74,7 +74,7 @@ func commandMap(cfg *config) error {
 	return nil
 }
 
-func commandMapb(cfg *config) error {
+func commandMapb(cfg *config, args ...string) error {
 	if cfg.previousURL == nil {
 		fmt.Println("You are already at the first page of location areas.")
 		return nil
@@ -90,6 +90,27 @@ func commandMapb(cfg *config) error {
 
 	for _, area := range locations.Results {
 		fmt.Println(area.Name)
+	}
+
+	return nil
+}
+
+func commandExplore(cfg *config, args ...string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("please provide a location area name")
+	}
+
+	areaName := args[0]
+	area, err := pokeapi.GetLocationArea(areaName, cfg.cache)
+	if err != nil {
+		return fmt.Errorf("error fetching location area %s: %v", areaName, err)
+	}
+
+	fmt.Printf("Exploring %s:\n", area.Name)
+	fmt.Println("Found Pokemon:")
+
+	for _, encounter := range area.PokemonEncounters {
+		fmt.Printf("- %s\n", encounter.Pokemon.Name)
 	}
 
 	return nil
@@ -117,6 +138,11 @@ func getCommands() map[string]cliCommand {
 			description: "Displays the previous 20 location areas",
 			callback: commandMapb,
 		},
+		"explore": {
+			name: "explore",
+			description: "Explores a specific location area",
+			callback: commandExplore,
+		},
 	
 	}
 }
@@ -140,13 +166,18 @@ func main() {
 		}
 
 		commandName := words[0]
+		args := []string{}
+		if len(words) > 1 {
+			args = words[1:]
+		}
+
 		command, exists := commands[commandName]
 		if !exists {
 			fmt.Println("Unknown command")
 			continue
 		}
 
-		err := command.callback(cfg)
+		err := command.callback(cfg, args...)
 		if err != nil {
 			fmt.Printf("Error executing command: %v\n", err)
 	}
