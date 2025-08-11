@@ -144,6 +144,7 @@ func commandCatch(cfg *config, args ...string) error {
 
 	if catchChance < 50 {
 		fmt.Printf("%s was caught!\n", pokemonName)
+		fmt.Println("You may now inspect it with the inspect commend.")
 
 		if cfg.pokedex == nil {
 			cfg.pokedex = make(map[string]Pokemon)
@@ -210,6 +211,29 @@ func commandInspect(cfg *config, args ...string) error {
 	return nil
 }
 
+func commandPokedex(cfg *config, args ...string) error {
+	fmt.Println("Your Pokedex:")
+
+	if len(cfg.pokedex) == 0 {
+		fmt.Println(" - (empty)")
+		return nil
+	}
+
+	// Get names and ids and sort by id
+	
+	pokemonList := make([]string, 0, len(cfg.pokedex))
+
+	for name, pokemon := range cfg.pokedex {
+		pokemonList = append(pokemonList, fmt.Sprintf("%s (ID: %d)", name, pokemon.ID))
+	}
+
+	for _, name := range pokemonList {
+		fmt.Println(" -", name)
+	}
+
+	return nil
+}
+
 func getCommands() map[string]cliCommand {
 	return map[string]cliCommand{
 		"exit": {
@@ -246,6 +270,11 @@ func getCommands() map[string]cliCommand {
 			name: "inspect",
 			description: "View details of a caught Pokemon",
 			callback: commandInspect,
+		},
+		"pokedex": {
+			name: "pokedex",
+			description: "View your caught Pokemon",
+			callback: commandPokedex,
 		},
 	}
 }
